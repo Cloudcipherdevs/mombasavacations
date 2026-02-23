@@ -15,7 +15,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+  import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
   import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
   const firebaseConfig = {
@@ -34,7 +34,7 @@
   const auth = getAuth(app);
 
   // ─── EXPOSE GLOBALLY ───
-  window._firebase = { db, storage, auth, collection, addDoc, getDocs, onSnapshot, query, orderBy, serverTimestamp, ref, uploadBytes, getDownloadURL, doc, updateDoc };
+  window._firebase = { db, storage, auth, collection, addDoc, getDocs, onSnapshot, query, orderBy, serverTimestamp, ref, uploadBytes, uploadBytesResumable, getDownloadURL, doc, updateDoc };
 
   // ─── LOAD ROOMS ───
   async function loadRooms() {
@@ -352,13 +352,11 @@
     progressWrap.style.display = 'block';
 
     try {
-      const { storage, db, ref, uploadBytes, getDownloadURL, collection, addDoc, serverTimestamp } = window._firebase;
+      const { storage, db, ref, uploadBytesResumable, getDownloadURL, collection, addDoc, serverTimestamp } = window._firebase;
 
-      // Compress image before upload if possible
+      // Compress image before upload
       const compressedFile = await compressImage(file, 1200, 0.82);
 
-      // Simulate upload progress (Firebase SDK uploadBytes doesn't stream progress — use uploadBytesResumable for real progress)
-      const { uploadBytesResumable } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js");
       const storageRef = ref(storage, `gallery/${Date.now()}_${file.name}`);
       const uploadTask = uploadBytesResumable(storageRef, compressedFile);
 
@@ -386,7 +384,9 @@
     } catch(err) {
       console.error('Upload error:', err);
       if (err.code === 'storage/unauthorized') {
-        showToast('❌ Permission denied. Make sure Storage rules allow authenticated uploads.');
+        showToast('❌ Permission denied. Check your Firebase Storage rules.');
+      } else if (err.code === 'storage/canceled') {
+        showToast('❌ Upload was cancelled.');
       } else {
         showToast('❌ Upload failed: ' + (err.message || err.code));
       }
@@ -411,12 +411,16 @@
     progressWrap.style.display = 'block';
 
     try {
-      const { storage, db, ref, collection, addDoc, serverTimestamp } = window._firebase;
-      const { uploadBytesResumable, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js");
+      const { storage, db, ref, uploadBytesResumable, getDownloadURL, collection, addDoc, serverTimestamp } = window._firebase;
 
       let imageUrl = '';
       if (file) {
-        if (file.size > 5 * 1024 * 1024) { showToast('❌ Image must be under 5MB'); btn.style.display='block'; progressWrap.style.display='none'; return; }
+        if (file.size > 5 * 1024 * 1024) {
+          showToast('❌ Image must be under 5MB');
+          btn.style.display = 'block';
+          progressWrap.style.display = 'none';
+          return;
+        }
         const compressed = await compressImage(file, 1200, 0.82);
         const storageRef = ref(storage, `rooms/${Date.now()}_${file.name}`);
         const uploadTask = uploadBytesResumable(storageRef, compressed);
@@ -1777,5 +1781,4 @@ if (window.location.hash === '#admin') {
 }
 </script>
 </body>
-
 </html>
