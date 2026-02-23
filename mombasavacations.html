@@ -1,0 +1,1780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mombasa Vacation – Luxury Stays on the Kenyan Coast</title>
+<meta name="description" content="Experience premium beachfront living in Mombasa. Studios from KES 5,500. Book your coastal escape today.">
+<meta name="keywords" content="Mombasa vacation rental, luxury stays Mombasa, beachfront accommodation Kenya, holiday apartments Mombasa">
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,700&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDI3IZFLJKkqApw8nYKPtZZi9jKDO8rHDU",
+    authDomain: "mombasavacations.firebaseapp.com",
+    projectId: "mombasavacations",
+    storageBucket: "mombasavacations.firebasestorage.app",
+    messagingSenderId: "1095407337679",
+    appId: "1:1095407337679:web:767beba934db3f1feaf7ba",
+    measurementId: "G-2256Z5YWYY"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+  const auth = getAuth(app);
+
+  // ─── EXPOSE GLOBALLY ───
+  window._firebase = { db, storage, auth, collection, addDoc, getDocs, onSnapshot, query, orderBy, serverTimestamp, ref, uploadBytes, getDownloadURL, doc, updateDoc };
+
+  // ─── LOAD ROOMS ───
+  async function loadRooms() {
+    const container = document.getElementById('rooms-grid');
+    if (!container) return;
+    try {
+      const q = query(collection(db, 'rooms'), orderBy('createdAt', 'asc'));
+      onSnapshot(q, (snap) => {
+        if (snap.empty) { renderDefaultRooms(); return; }
+        container.innerHTML = '';
+        snap.forEach(d => renderRoomCard(container, { id: d.id, ...d.data() }));
+        initScrollAnimations();
+      });
+    } catch(e) { renderDefaultRooms(); }
+  }
+
+  function renderDefaultRooms() {
+    const container = document.getElementById('rooms-grid');
+    if (!container) return;
+    const defaults = [
+      { id:'1', name:'Studio Suite', price:5500, description:'A cozy, elegantly furnished studio with ocean breezes and modern amenities — perfect for solo travellers or couples.', imageUrl:'https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800&q=80', amenities:['WiFi','AC','TV','Kitchen','Parking'] },
+      { id:'2', name:'1 Bedroom Apartment', price:8000, description:'Spacious 1-bedroom retreat with a private lounge, full kitchen, and serene garden views steps from the beach.', imageUrl:'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=80', amenities:['WiFi','AC','TV','Full Kitchen','Parking','Balcony'] },
+      { id:'3', name:'2 Bedroom Penthouse', price:12000, description:'Our signature 2-bedroom penthouse offering panoramic ocean views, premium furnishings, and the ultimate coastal luxury experience.', imageUrl:'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80', amenities:['WiFi','AC','Smart TV','Full Kitchen','Parking','2 Balconies','Pool Access'] },
+    ];
+    container.innerHTML = '';
+    defaults.forEach(r => renderRoomCard(container, r));
+    initScrollAnimations();
+  }
+
+  function renderRoomCard(container, room) {
+    const amenityIcons = { 'WiFi':'📶', 'AC':'❄️', 'TV':'📺', 'Smart TV':'📺', 'Kitchen':'🍳', 'Full Kitchen':'🍳', 'Parking':'🚗', 'Balcony':'🌿', '2 Balconies':'🌿', 'Pool Access':'🏊' };
+    const amenitiesHTML = (room.amenities||[]).map(a => `<span class="amenity-tag">${amenityIcons[a]||'✓'} ${a}</span>`).join('');
+    const card = document.createElement('div');
+    card.className = 'room-card scroll-reveal';
+    card.innerHTML = `
+      <div class="room-img-wrap">
+        <img src="${room.imageUrl||'https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800&q=80'}" alt="${room.name}" loading="lazy">
+        <div class="room-price-badge">KES ${Number(room.price).toLocaleString()}<span>/night</span></div>
+      </div>
+      <div class="room-body">
+        <h3 class="room-name">${room.name}</h3>
+        <p class="room-desc">${room.description}</p>
+        <div class="amenities-row">${amenitiesHTML}</div>
+        <button class="btn-reserve" onclick="openBookingModal('${room.name}')">Reserve Now</button>
+      </div>`;
+    container.appendChild(card);
+  }
+
+  // ─── LOAD GALLERY ───
+  async function loadGallery() {
+    const container = document.getElementById('gallery-grid');
+    if (!container) return;
+    try {
+      const q = query(collection(db, 'gallery'), orderBy('uploadedAt', 'desc'));
+      onSnapshot(q, (snap) => {
+        if (snap.empty) { renderDefaultGallery(); return; }
+        container.innerHTML = '';
+        snap.forEach(d => renderGalleryItem(container, { id: d.id, ...d.data() }));
+      });
+    } catch(e) { renderDefaultGallery(); }
+  }
+
+  function renderDefaultGallery() {
+    const container = document.getElementById('gallery-grid');
+    if (!container) return;
+    const imgs = [
+      { imageUrl:'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&q=80', title:'Beachfront Views' },
+      { imageUrl:'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=600&q=80', title:'Luxury Interiors' },
+      { imageUrl:'https://images.unsplash.com/photo-1590490360182-c33d57733427?w=600&q=80', title:'Private Pool' },
+      { imageUrl:'https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=600&q=80', title:'Premium Suites' },
+      { imageUrl:'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=600&q=80', title:'Ocean Sunsets' },
+      { imageUrl:'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600&q=80', title:'Coastal Dining' },
+    ];
+    container.innerHTML = '';
+    imgs.forEach(i => renderGalleryItem(container, i));
+  }
+
+  function renderGalleryItem(container, item) {
+    const div = document.createElement('div');
+    div.className = 'gallery-item';
+    div.innerHTML = `<img src="${item.imageUrl}" alt="${item.title}" loading="lazy"><div class="gallery-overlay"><span>${item.title}</span></div>`;
+    div.addEventListener('click', () => openLightbox(item.imageUrl, item.title));
+    container.appendChild(div);
+  }
+
+  // ─── LOAD TESTIMONIALS ───
+  async function loadTestimonials() {
+    const container = document.getElementById('testimonials-track');
+    if (!container) return;
+    try {
+      const snap = await getDocs(collection(db, 'testimonials'));
+      if (snap.empty) { renderDefaultTestimonials(); return; }
+      container.innerHTML = '';
+      snap.forEach(d => renderTestimonialCard(container, d.data()));
+    } catch(e) { renderDefaultTestimonials(); }
+  }
+
+  function renderDefaultTestimonials() {
+    const container = document.getElementById('testimonials-track');
+    if (!container) return;
+    const items = [
+      { name:'Amina K.', location:'Nairobi', rating:5, text:'Absolutely breathtaking! The ocean views from the balcony were unreal. The apartment was immaculate and the host was incredibly responsive. Will definitely return!' },
+      { name:'James O.', location:'London', rating:5, text:'The 2-bedroom suite exceeded every expectation. Modern, spacious, and perfectly located. Best vacation rental experience I\'ve had in Africa.' },
+      { name:'Fatuma S.', location:'Mombasa', rating:5, text:'Stayed for a week-long staycation and it felt like a 5-star resort. The sunset views are magical. The price is unbeatable for this quality!' },
+      { name:'Michael R.', location:'Dubai', rating:5, text:'Premium finishes, spotless cleanliness, and the most helpful management team. The WhatsApp booking process was seamless.' },
+    ];
+    container.innerHTML = '';
+    items.forEach(i => renderTestimonialCard(container, i));
+    initTestimonialSlider();
+  }
+
+  function renderTestimonialCard(container, t) {
+    const stars = '⭐'.repeat(t.rating||5);
+    const div = document.createElement('div');
+    div.className = 'testimonial-card';
+    div.innerHTML = `<div class="t-stars">${stars}</div><p class="t-text">"${t.text}"</p><div class="t-author"><strong>${t.name}</strong><span>${t.location}</span></div>`;
+    container.appendChild(div);
+  }
+
+  // ─── BOOKING ───
+  window.submitBooking = async function(e) {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    const errEl = document.getElementById('booking-error');
+    errEl.textContent = '';
+    btn.textContent = 'Saving…';
+    btn.disabled = true;
+    try {
+      const { db, collection, addDoc, serverTimestamp } = window._firebase;
+      await addDoc(collection(db, 'bookings'), {
+        name: document.getElementById('b-name').value.trim(),
+        phone: document.getElementById('b-phone').value.trim(),
+        roomType: document.getElementById('b-room').value,
+        checkIn: document.getElementById('b-checkin').value,
+        checkOut: document.getElementById('b-checkout').value,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
+      showToast('🎉 Booking received! We\'ll contact you shortly.');
+      e.target.reset();
+      closeBookingModal();
+    } catch(err) {
+      console.error('Booking error:', err);
+      if (err.code === 'permission-denied') {
+        errEl.textContent = '⚠️ Booking unavailable right now. Please WhatsApp or call us directly.';
+      } else {
+        errEl.textContent = '❌ ' + (err.message || 'Something went wrong. Please try again.');
+      }
+    }
+    btn.textContent = 'Confirm Booking';
+    btn.disabled = false;
+  };
+
+  // ─── FIREBASE AUTH — LOGIN ONLY ───
+  // Accounts are created by you in Firebase Console → Authentication → Add User.
+  // The client logs in with the credentials you share, then changes their password inside the dashboard.
+
+  onAuthStateChanged(auth, user => {
+    const loginSection = document.getElementById('admin-login');
+    const adminSection = document.getElementById('admin-section');
+    if (!loginSection || !adminSection) return;
+    if (user) {
+      loginSection.style.display = 'none';
+      adminSection.style.display = 'block';
+      document.getElementById('admin-user-email').textContent = user.email;
+      loadAdminBookings();
+    } else {
+      loginSection.style.display = 'flex';
+      adminSection.style.display = 'none';
+      document.getElementById('auth-error').textContent = '';
+    }
+  });
+
+  window.adminLogin = async function(e) {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    const errEl = document.getElementById('auth-error');
+    errEl.style.color = '#e74c3c';
+    errEl.textContent = '';
+    btn.textContent = 'Signing in…'; btn.disabled = true;
+    try {
+      await signInWithEmailAndPassword(auth,
+        document.getElementById('login-email').value.trim(),
+        document.getElementById('login-pass').value
+      );
+    } catch(err) {
+      errEl.textContent = friendlyAuthError(err.code);
+    }
+    btn.textContent = 'Sign In'; btn.disabled = false;
+  };
+
+  window.adminResetPassword = async function(e) {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    const errEl = document.getElementById('auth-error');
+    errEl.textContent = '';
+    btn.textContent = 'Sending…'; btn.disabled = true;
+    try {
+      await sendPasswordResetEmail(auth, document.getElementById('reset-email').value.trim());
+      errEl.style.color = '#1a9e50';
+      errEl.textContent = '✅ Reset link sent! Check your inbox.';
+    } catch(err) {
+      errEl.style.color = '#e74c3c';
+      errEl.textContent = friendlyAuthError(err.code);
+    }
+    btn.textContent = 'Send Reset Link'; btn.disabled = false;
+  };
+
+  // Change password — available inside the dashboard
+  window.changePassword = async function(e) {
+    e.preventDefault();
+    const { updatePassword, EmailAuthProvider, reauthenticateWithCredential } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    const user = auth.currentUser;
+    const errEl = document.getElementById('change-pass-error');
+    errEl.style.color = '#e74c3c'; errEl.textContent = '';
+    const current = document.getElementById('current-pass').value;
+    const newPass = document.getElementById('new-pass').value;
+    const confirm = document.getElementById('confirm-new-pass').value;
+    if (newPass !== confirm) { errEl.textContent = 'New passwords do not match.'; return; }
+    if (newPass.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.textContent = 'Updating…'; btn.disabled = true;
+    try {
+      const credential = EmailAuthProvider.credential(user.email, current);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, newPass);
+      errEl.style.color = '#1a9e50';
+      errEl.textContent = '✅ Password updated successfully!';
+      e.target.reset();
+    } catch(err) {
+      errEl.textContent = friendlyAuthError(err.code);
+    }
+    btn.textContent = 'Update Password'; btn.disabled = false;
+  };
+
+  window.adminLogout = async function() {
+    await signOut(auth);
+    showToast('Logged out successfully');
+  };
+
+  window.showAuthTab = function(tab) {
+    document.querySelectorAll('.auth-tab-panel').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('.auth-tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('auth-panel-' + tab).style.display = 'block';
+    document.getElementById('auth-tab-' + tab).classList.add('active');
+    document.getElementById('auth-error').textContent = '';
+  };
+
+  function friendlyAuthError(code) {
+    const map = {
+      'auth/user-not-found':        'No account found with that email.',
+      'auth/wrong-password':        'Incorrect password. Try again.',
+      'auth/invalid-email':         'Please enter a valid email address.',
+      'auth/too-many-requests':     'Too many attempts. Please wait a moment.',
+      'auth/network-request-failed':'Network error. Check your connection.',
+      'auth/invalid-credential':    'Incorrect email or password.',
+      'auth/wrong-password':        'Current password is incorrect.',
+    };
+    return map[code] || 'Something went wrong. Please try again.';
+  }
+
+  // ─── ADMIN: LOAD BOOKINGS ───
+  async function loadAdminBookings() {
+    const container = document.getElementById('admin-bookings-list');
+    if (!container) return;
+    try {
+      const q = query(collection(db, 'bookings'), orderBy('createdAt', 'desc'));
+      onSnapshot(q, snap => {
+        if (snap.empty) { container.innerHTML = '<p style="color:#888;padding:20px">No bookings yet.</p>'; return; }
+        container.innerHTML = '';
+        snap.forEach(d => {
+          const b = { id: d.id, ...d.data() };
+          const row = document.createElement('div');
+          row.className = `booking-row ${b.status==='confirmed'?'confirmed':''}`;
+          row.innerHTML = `
+            <div class="b-info">
+              <strong>${b.name}</strong>
+              <span>📱 ${b.phone}</span>
+              <span>🛏 ${b.roomType}</span>
+              <span>📅 ${b.checkIn} → ${b.checkOut}</span>
+              <span class="b-status ${b.status}">${b.status||'pending'}</span>
+            </div>
+            <button class="btn-confirm-booking" onclick="confirmBooking('${b.id}')" ${b.status==='confirmed'?'disabled':''}>
+              ${b.status==='confirmed'?'✓ Confirmed':'Confirm'}
+            </button>`;
+          container.appendChild(row);
+        });
+      });
+    } catch(e) { container.innerHTML = '<p style="color:#f44">Error loading bookings.</p>'; }
+  }
+
+  window.confirmBooking = async function(id) {
+    try {
+      await updateDoc(doc(db, 'bookings', id), { status: 'confirmed' });
+      showToast('Booking confirmed!');
+    } catch(e) { showToast('Error confirming booking'); }
+  };
+
+  // ─── ADMIN: UPLOAD GALLERY ───
+  window.uploadGalleryImage = async function(e) {
+    e.preventDefault();
+    const file = document.getElementById('gallery-file').files[0];
+    const title = document.getElementById('gallery-title').value;
+    if (!file) { showToast('Please select an image'); return; }
+
+    // File size guard — 5MB max
+    if (file.size > 5 * 1024 * 1024) { showToast('❌ Image must be under 5MB'); return; }
+
+    const btn = e.target.querySelector('button');
+    const progressWrap = document.getElementById('gallery-upload-progress');
+    const progressBar = document.getElementById('gallery-progress-bar');
+    const progressText = document.getElementById('gallery-progress-text');
+
+    btn.style.display = 'none';
+    progressWrap.style.display = 'block';
+
+    try {
+      const { storage, db, ref, uploadBytes, getDownloadURL, collection, addDoc, serverTimestamp } = window._firebase;
+
+      // Compress image before upload if possible
+      const compressedFile = await compressImage(file, 1200, 0.82);
+
+      // Simulate upload progress (Firebase SDK uploadBytes doesn't stream progress — use uploadBytesResumable for real progress)
+      const { uploadBytesResumable } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js");
+      const storageRef = ref(storage, `gallery/${Date.now()}_${file.name}`);
+      const uploadTask = uploadBytesResumable(storageRef, compressedFile);
+
+      await new Promise((resolve, reject) => {
+        uploadTask.on('state_changed',
+          (snapshot) => {
+            const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            progressBar.style.width = pct + '%';
+            progressText.textContent = pct + '%';
+          },
+          (err) => reject(err),
+          () => resolve()
+        );
+      });
+
+      const url = await getDownloadURL(uploadTask.snapshot.ref);
+      await addDoc(collection(db, 'gallery'), {
+        imageUrl: url,
+        title: title || 'Gallery Image',
+        uploadedAt: serverTimestamp()
+      });
+
+      showToast('✅ Image uploaded successfully!');
+      e.target.reset();
+    } catch(err) {
+      console.error('Upload error:', err);
+      if (err.code === 'storage/unauthorized') {
+        showToast('❌ Permission denied. Make sure Storage rules allow authenticated uploads.');
+      } else {
+        showToast('❌ Upload failed: ' + (err.message || err.code));
+      }
+    }
+
+    btn.style.display = 'block';
+    progressWrap.style.display = 'none';
+    progressBar.style.width = '0%';
+    progressText.textContent = '0%';
+  };
+
+  // ─── ADMIN: ADD ROOM ───
+  window.addRoom = async function(e) {
+    e.preventDefault();
+    const file = document.getElementById('room-img-file').files[0];
+    const btn = e.target.querySelector('button[type="submit"]');
+    const progressWrap = document.getElementById('room-upload-progress');
+    const progressBar = document.getElementById('room-progress-bar');
+    const progressText = document.getElementById('room-progress-text');
+
+    btn.style.display = 'none';
+    progressWrap.style.display = 'block';
+
+    try {
+      const { storage, db, ref, collection, addDoc, serverTimestamp } = window._firebase;
+      const { uploadBytesResumable, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js");
+
+      let imageUrl = '';
+      if (file) {
+        if (file.size > 5 * 1024 * 1024) { showToast('❌ Image must be under 5MB'); btn.style.display='block'; progressWrap.style.display='none'; return; }
+        const compressed = await compressImage(file, 1200, 0.82);
+        const storageRef = ref(storage, `rooms/${Date.now()}_${file.name}`);
+        const uploadTask = uploadBytesResumable(storageRef, compressed);
+        await new Promise((resolve, reject) => {
+          uploadTask.on('state_changed',
+            (snapshot) => {
+              const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+              progressBar.style.width = pct + '%';
+              progressText.textContent = pct + '%';
+            },
+            reject,
+            resolve
+          );
+        });
+        imageUrl = await getDownloadURL(uploadTask.snapshot.ref);
+      } else {
+        progressBar.style.width = '60%';
+        progressText.textContent = 'Saving…';
+      }
+
+      await addDoc(collection(db, 'rooms'), {
+        name: document.getElementById('room-name').value.trim(),
+        price: Number(document.getElementById('room-price').value),
+        description: document.getElementById('room-desc').value.trim(),
+        amenities: document.getElementById('room-amenities').value.split(',').map(s => s.trim()).filter(Boolean),
+        imageUrl,
+        createdAt: serverTimestamp()
+      });
+
+      progressBar.style.width = '100%';
+      progressText.textContent = '100%';
+      showToast('✅ Room added successfully!');
+      e.target.reset();
+    } catch(err) {
+      console.error('Add room error:', err);
+      if (err.code === 'storage/unauthorized' || err.code === 'permission-denied') {
+        showToast('❌ Permission denied. Check your Firebase rules.');
+      } else {
+        showToast('❌ Error: ' + (err.message || err.code));
+      }
+    }
+
+    btn.style.display = 'block';
+    progressWrap.style.display = 'none';
+    progressBar.style.width = '0%';
+    progressText.textContent = '0%';
+  };
+
+  // ─── IMAGE COMPRESSION HELPER ───
+  function compressImage(file, maxWidth, quality) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality);
+      };
+      img.onerror = () => resolve(file); // fallback to original if compression fails
+      img.src = url;
+    });
+  }
+
+  // ─── INIT ───
+  document.addEventListener('DOMContentLoaded', () => {
+    loadRooms();
+    loadGallery();
+    loadTestimonials();
+    if (window.location.hash === '#admin') showAdminPage();
+  });
+</script>
+
+<style>
+/* ══════════════════════════════════════════
+   CSS VARIABLES & RESET
+══════════════════════════════════════════ */
+:root {
+  --ocean: #0E5E6F;
+  --gold: #F4A261;
+  --sand: #FDF6EC;
+  --teal: #073B4C;
+  --white: #ffffff;
+  --glass: rgba(255,255,255,0.12);
+  --glass-border: rgba(255,255,255,0.2);
+  --shadow: 0 20px 60px rgba(7,59,76,0.18);
+  --radius: 20px;
+  --ff-heading: 'Playfair Display', Georgia, serif;
+  --ff-body: 'Poppins', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--ff-body);
+  background: var(--sand);
+  color: var(--teal);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+img { display: block; max-width: 100%; }
+a { text-decoration: none; color: inherit; }
+
+/* ══════════════════════════════════════════
+   SCROLLBAR
+══════════════════════════════════════════ */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--sand); }
+::-webkit-scrollbar-thumb { background: var(--ocean); border-radius: 3px; }
+
+/* ══════════════════════════════════════════
+   NAVIGATION
+══════════════════════════════════════════ */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  padding: 18px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  transition: all 0.4s ease;
+}
+nav.scrolled {
+  background: rgba(7,59,76,0.95);
+  backdrop-filter: blur(20px);
+  padding: 12px 32px;
+  box-shadow: 0 4px 30px rgba(0,0,0,0.25);
+}
+.nav-logo {
+  font-family: var(--ff-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--white);
+  letter-spacing: -0.5px;
+}
+.nav-logo span { color: var(--gold); }
+.nav-links { display: flex; gap: 28px; align-items: center; }
+.nav-links a {
+  color: rgba(255,255,255,0.85);
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--gold); }
+.nav-book-btn {
+  background: var(--gold);
+  color: var(--teal) !important;
+  padding: 10px 22px;
+  border-radius: 50px;
+  font-weight: 600 !important;
+  font-size: 0.85rem !important;
+  transition: all 0.2s !important;
+}
+.nav-book-btn:hover { background: #e8854a; transform: translateY(-1px); }
+.nav-hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; }
+.nav-hamburger span { display: block; width: 24px; height: 2px; background: white; border-radius: 2px; transition: 0.3s; }
+.nav-mobile { display: none; }
+
+/* ══════════════════════════════════════════
+   HERO SECTION
+══════════════════════════════════════════ */
+#hero {
+  position: relative;
+  height: 100vh; min-height: 600px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  text-align: center;
+}
+.hero-bg {
+  position: absolute; inset: 0;
+  background: url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1800&q=85') center/cover no-repeat;
+}
+.hero-bg::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg,
+    rgba(7,59,76,0.35) 0%,
+    rgba(7,59,76,0.5) 40%,
+    rgba(7,59,76,0.75) 100%);
+}
+.hero-content {
+  position: relative; z-index: 2;
+  max-width: 750px; padding: 0 24px;
+}
+.hero-badge {
+  display: inline-block;
+  background: rgba(244,162,97,0.2);
+  border: 1px solid rgba(244,162,97,0.5);
+  color: var(--gold);
+  padding: 6px 18px; border-radius: 50px;
+  font-size: 0.8rem; font-weight: 600; letter-spacing: 2px;
+  text-transform: uppercase; margin-bottom: 24px;
+  animation: fadeDown 1s ease both;
+}
+.hero-title {
+  font-family: var(--ff-heading);
+  font-size: clamp(2.8rem, 7vw, 5.5rem);
+  font-weight: 900; line-height: 1.05;
+  color: var(--white);
+  margin-bottom: 20px;
+  animation: fadeDown 1s 0.15s ease both;
+}
+.hero-title em { color: var(--gold); font-style: italic; }
+.hero-sub {
+  font-size: clamp(1rem, 2.5vw, 1.2rem);
+  color: rgba(255,255,255,0.82);
+  font-weight: 300; margin-bottom: 40px;
+  animation: fadeDown 1s 0.3s ease both;
+  line-height: 1.6;
+}
+.hero-btns {
+  display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+  animation: fadeDown 1s 0.45s ease both;
+}
+.btn-primary {
+  background: var(--gold);
+  color: var(--teal);
+  padding: 16px 36px; border-radius: 50px;
+  font-weight: 700; font-size: 0.95rem;
+  letter-spacing: 0.3px;
+  border: none; cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  display: inline-block;
+}
+.btn-primary:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 12px 35px rgba(244,162,97,0.5); }
+.btn-outline {
+  background: transparent;
+  color: var(--white);
+  padding: 16px 36px; border-radius: 50px;
+  font-weight: 600; font-size: 0.95rem;
+  border: 2px solid rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: all 0.3s;
+  display: inline-block;
+}
+.btn-outline:hover { background: rgba(255,255,255,0.12); border-color: white; }
+.hero-scroll-hint {
+  position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+  color: rgba(255,255,255,0.6); font-size: 0.75rem; letter-spacing: 2px;
+  text-transform: uppercase; z-index: 2;
+  animation: bounce 2s infinite;
+}
+.hero-scroll-hint::before {
+  content: '↓'; display: block; text-align: center;
+  font-size: 1.2rem; margin-bottom: 4px;
+}
+/* Price tickers */
+.hero-tickers {
+  position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 16px; z-index: 2;
+  animation: fadeDown 1s 0.6s ease both;
+  flex-wrap: wrap; justify-content: center; padding: 0 20px;
+}
+.ticker {
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  color: white; border-radius: 12px;
+  padding: 10px 18px; text-align: center;
+}
+.ticker-label { font-size: 0.7rem; opacity: 0.7; letter-spacing: 1px; text-transform: uppercase; }
+.ticker-price { font-family: var(--ff-heading); font-size: 1.1rem; font-weight: 700; color: var(--gold); }
+
+/* ══════════════════════════════════════════
+   SECTIONS COMMON
+══════════════════════════════════════════ */
+section { padding: 100px 24px; }
+.section-header { text-align: center; max-width: 600px; margin: 0 auto 60px; }
+.section-label {
+  display: inline-block;
+  color: var(--ocean);
+  font-size: 0.75rem; font-weight: 600;
+  letter-spacing: 3px; text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.section-title {
+  font-family: var(--ff-heading);
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700; color: var(--teal);
+  line-height: 1.15; margin-bottom: 16px;
+}
+.section-title em { color: var(--ocean); font-style: italic; }
+.section-sub { color: #5a7a87; font-size: 1rem; line-height: 1.7; }
+
+/* ══════════════════════════════════════════
+   ROOMS SECTION
+══════════════════════════════════════════ */
+#rooms { background: var(--white); }
+#rooms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 32px;
+  max-width: 1200px; margin: 0 auto;
+}
+.room-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.4s;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+.room-card:hover { transform: translateY(-8px); box-shadow: 0 30px 80px rgba(7,59,76,0.22); }
+.room-img-wrap { position: relative; overflow: hidden; height: 220px; }
+.room-img-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s; }
+.room-card:hover .room-img-wrap img { transform: scale(1.07); }
+.room-price-badge {
+  position: absolute; top: 16px; right: 16px;
+  background: var(--gold);
+  color: var(--teal);
+  padding: 8px 16px; border-radius: 50px;
+  font-weight: 700; font-size: 1rem;
+  font-family: var(--ff-heading);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+.room-price-badge span { font-size: 0.75rem; font-weight: 400; opacity: 0.8; }
+.room-body { padding: 24px; }
+.room-name {
+  font-family: var(--ff-heading);
+  font-size: 1.4rem; font-weight: 700;
+  color: var(--teal); margin-bottom: 10px;
+}
+.room-desc { color: #6a8a95; font-size: 0.9rem; line-height: 1.65; margin-bottom: 18px; }
+.amenities-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.amenity-tag {
+  background: rgba(14,94,111,0.08);
+  color: var(--ocean);
+  border-radius: 50px; padding: 5px 12px;
+  font-size: 0.75rem; font-weight: 500;
+}
+.btn-reserve {
+  width: 100%;
+  background: var(--teal);
+  color: white; border: none;
+  padding: 14px; border-radius: 12px;
+  font-size: 0.95rem; font-weight: 600;
+  cursor: pointer; transition: all 0.3s;
+  font-family: var(--ff-body);
+}
+.btn-reserve:hover { background: var(--ocean); transform: translateY(-2px); }
+
+/* ══════════════════════════════════════════
+   GALLERY SECTION
+══════════════════════════════════════════ */
+#gallery { background: var(--sand); }
+#gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  max-width: 1100px; margin: 0 auto;
+}
+.gallery-item {
+  position: relative; overflow: hidden;
+  border-radius: 16px; cursor: pointer;
+  aspect-ratio: 1;
+}
+.gallery-item:first-child, .gallery-item:nth-child(4) {
+  grid-column: span 2;
+  aspect-ratio: 16/9;
+}
+.gallery-item img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s; }
+.gallery-item:hover img { transform: scale(1.08); }
+.gallery-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(7,59,76,0.8) 0%, transparent 60%);
+  display: flex; align-items: flex-end; padding: 20px;
+  opacity: 0; transition: opacity 0.3s;
+}
+.gallery-item:hover .gallery-overlay { opacity: 1; }
+.gallery-overlay span { color: white; font-weight: 600; font-size: 0.95rem; }
+
+/* ══════════════════════════════════════════
+   LIGHTBOX
+══════════════════════════════════════════ */
+#lightbox {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.92);
+  display: none; align-items: center; justify-content: center;
+  padding: 20px;
+}
+#lightbox.open { display: flex; }
+#lightbox img { max-width: 90vw; max-height: 85vh; border-radius: 12px; object-fit: contain; }
+#lightbox-close {
+  position: absolute; top: 20px; right: 24px;
+  color: white; font-size: 2rem; cursor: pointer;
+  background: rgba(255,255,255,0.1);
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s;
+}
+#lightbox-close:hover { background: rgba(255,255,255,0.2); }
+#lightbox-title { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.7); font-size: 0.9rem; }
+
+/* ══════════════════════════════════════════
+   ABOUT / FEATURES SECTION
+══════════════════════════════════════════ */
+#about { background: var(--teal); color: white; }
+#about .section-title { color: white; }
+#about .section-sub { color: rgba(255,255,255,0.65); }
+#about .section-label { color: var(--gold); }
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 24px; max-width: 1100px; margin: 0 auto;
+}
+.feature-card {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px; padding: 32px 24px;
+  text-align: center;
+  backdrop-filter: blur(10px);
+  transition: transform 0.3s, background 0.3s;
+}
+.feature-card:hover { transform: translateY(-6px); background: rgba(255,255,255,0.12); }
+.feature-icon { font-size: 2.5rem; margin-bottom: 16px; }
+.feature-card h4 { font-family: var(--ff-heading); font-size: 1.2rem; margin-bottom: 10px; color: var(--gold); }
+.feature-card p { font-size: 0.875rem; color: rgba(255,255,255,0.65); line-height: 1.65; }
+
+/* ══════════════════════════════════════════
+   TESTIMONIALS
+══════════════════════════════════════════ */
+#testimonials { background: var(--white); }
+.testimonials-slider { position: relative; overflow: hidden; max-width: 1000px; margin: 0 auto; }
+#testimonials-track { display: flex; gap: 24px; transition: transform 0.5s cubic-bezier(0.25,1,0.5,1); }
+.testimonial-card {
+  flex: 0 0 calc(100% / 1.5);
+  background: var(--sand);
+  border-radius: 20px; padding: 36px;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+.t-stars { font-size: 1.2rem; margin-bottom: 16px; }
+.t-text {
+  font-family: var(--ff-heading);
+  font-size: 1.05rem; font-style: italic;
+  color: var(--teal); line-height: 1.7;
+  margin-bottom: 24px;
+}
+.t-author strong { display: block; font-weight: 600; color: var(--teal); }
+.t-author span { font-size: 0.85rem; color: #8aaab5; }
+.slider-controls { display: flex; gap: 12px; justify-content: center; margin-top: 32px; }
+.slider-btn {
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 2px solid var(--ocean);
+  background: transparent;
+  color: var(--ocean); font-size: 1.1rem;
+  cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
+}
+.slider-btn:hover { background: var(--ocean); color: white; }
+
+/* ══════════════════════════════════════════
+   LOCATION SECTION
+══════════════════════════════════════════ */
+#location { background: var(--sand); }
+.location-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; max-width: 1100px; margin: 0 auto; align-items: center; }
+.location-info h3 { font-family: var(--ff-heading); font-size: 1.8rem; margin-bottom: 20px; color: var(--teal); }
+.location-info p { color: #6a8a95; line-height: 1.8; margin-bottom: 20px; }
+.proximity-list { list-style: none; }
+.proximity-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(0,0,0,0.06); font-size: 0.9rem; color: var(--teal); }
+.proximity-list li span { font-size: 1.2rem; }
+.map-wrap { border-radius: 20px; overflow: hidden; box-shadow: var(--shadow); }
+.map-wrap iframe { width: 100%; height: 380px; border: none; }
+
+/* ══════════════════════════════════════════
+   CTA SECTION
+══════════════════════════════════════════ */
+#cta {
+  background: linear-gradient(135deg, var(--ocean) 0%, var(--teal) 100%);
+  text-align: center; position: relative; overflow: hidden;
+}
+#cta::before {
+  content: '';
+  position: absolute; top: -50%; left: -25%;
+  width: 150%; height: 200%;
+  background: radial-gradient(ellipse at 50% 50%, rgba(244,162,97,0.12) 0%, transparent 60%);
+}
+#cta .section-title { color: white; }
+#cta .section-sub { color: rgba(255,255,255,0.7); }
+#cta .section-label { color: var(--gold); }
+.cta-phone {
+  font-family: var(--ff-heading);
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 900; color: var(--gold);
+  letter-spacing: -1px; margin: 24px 0 32px;
+}
+.cta-btns { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; position: relative; }
+.btn-whatsapp {
+  background: #25D366; color: white;
+  padding: 16px 36px; border-radius: 50px;
+  font-weight: 700; font-size: 1rem;
+  border: none; cursor: pointer;
+  transition: all 0.3s;
+  display: inline-flex; align-items: center; gap: 10px;
+  box-shadow: 0 8px 25px rgba(37,211,102,0.35);
+}
+.btn-whatsapp:hover { transform: translateY(-3px); box-shadow: 0 15px 35px rgba(37,211,102,0.45); }
+.btn-call {
+  background: rgba(255,255,255,0.12);
+  border: 2px solid rgba(255,255,255,0.35);
+  color: white; padding: 16px 36px; border-radius: 50px;
+  font-weight: 600; font-size: 1rem;
+  cursor: pointer; transition: all 0.3s;
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.btn-call:hover { background: rgba(255,255,255,0.2); }
+
+/* ══════════════════════════════════════════
+   BOOKING MODAL
+══════════════════════════════════════════ */
+#booking-modal {
+  position: fixed; inset: 0; z-index: 8000;
+  background: rgba(7,59,76,0.7); backdrop-filter: blur(8px);
+  display: none; align-items: center; justify-content: center; padding: 20px;
+}
+#booking-modal.open { display: flex; }
+.modal-box {
+  background: white; border-radius: 24px;
+  padding: 40px; max-width: 500px; width: 100%;
+  box-shadow: 0 40px 100px rgba(0,0,0,0.35);
+  animation: popIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both;
+  max-height: 90vh; overflow-y: auto;
+}
+.modal-box h2 { font-family: var(--ff-heading); font-size: 1.8rem; color: var(--teal); margin-bottom: 8px; }
+.modal-box p { color: #8a9a9f; font-size: 0.9rem; margin-bottom: 28px; }
+.form-group { margin-bottom: 18px; }
+.form-group label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--teal); margin-bottom: 7px; letter-spacing: 0.3px; }
+.form-group input, .form-group select {
+  width: 100%; padding: 13px 16px;
+  border: 1.5px solid rgba(0,0,0,0.1);
+  border-radius: 12px; font-size: 0.95rem;
+  font-family: var(--ff-body); color: var(--teal);
+  background: var(--sand); transition: border 0.2s;
+  outline: none;
+}
+.form-group input:focus, .form-group select:focus { border-color: var(--ocean); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.modal-submit {
+  width: 100%; padding: 16px;
+  background: var(--teal); color: white;
+  border: none; border-radius: 14px;
+  font-size: 1rem; font-weight: 700;
+  font-family: var(--ff-body); cursor: pointer;
+  transition: all 0.3s; margin-top: 8px;
+}
+.modal-submit:hover { background: var(--ocean); }
+.modal-close-btn {
+  position: absolute; top: 16px; right: 16px;
+  background: rgba(0,0,0,0.08); border: none;
+  width: 36px; height: 36px; border-radius: 50%;
+  cursor: pointer; font-size: 1.1rem; color: var(--teal);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-close-btn:hover { background: rgba(0,0,0,0.15); }
+.modal-inner { position: relative; }
+
+/* ══════════════════════════════════════════
+   WHATSAPP FAB
+══════════════════════════════════════════ */
+#wa-fab {
+  position: fixed; bottom: 28px; right: 28px; z-index: 900;
+  width: 60px; height: 60px; border-radius: 50%;
+  background: #25D366;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem;
+  box-shadow: 0 8px 25px rgba(37,211,102,0.5);
+  transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  cursor: pointer;
+  animation: pulse-green 2s infinite;
+}
+#wa-fab:hover { transform: scale(1.15); box-shadow: 0 12px 35px rgba(37,211,102,0.6); }
+
+/* ══════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════ */
+#toast {
+  position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--teal); color: white;
+  padding: 14px 28px; border-radius: 50px;
+  font-size: 0.9rem; font-weight: 500;
+  opacity: 0; transition: all 0.35s;
+  z-index: 99999; white-space: nowrap;
+  pointer-events: none;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ══════════════════════════════════════════
+   FOOTER
+══════════════════════════════════════════ */
+footer {
+  background: var(--teal);
+  color: rgba(255,255,255,0.65);
+  padding: 60px 32px 30px;
+  text-align: center;
+}
+footer .footer-logo { font-family: var(--ff-heading); font-size: 1.8rem; color: white; margin-bottom: 12px; }
+footer .footer-logo span { color: var(--gold); }
+footer p { font-size: 0.875rem; margin-bottom: 32px; }
+.footer-links { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; margin-bottom: 32px; }
+.footer-links a { color: rgba(255,255,255,0.6); font-size: 0.875rem; transition: color 0.2s; }
+.footer-links a:hover { color: var(--gold); }
+footer hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 24px 0; }
+footer small { font-size: 0.8rem; }
+
+/* ══════════════════════════════════════════
+   ADMIN PAGE
+══════════════════════════════════════════ */
+#admin-page {
+  display: none; min-height: 100vh;
+  background: #f0f4f7; padding-top: 80px;
+}
+#admin-page.active { display: block; }
+.admin-wrapper { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+.admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; flex-wrap: wrap; gap: 16px; }
+.admin-title { font-family: var(--ff-heading); font-size: 2rem; color: var(--teal); }
+.btn-logout { background: #e74c3c; color: white; border: none; padding: 10px 22px; border-radius: 10px; cursor: pointer; font-weight: 600; transition: opacity 0.2s; }
+.btn-logout:hover { opacity: 0.85; }
+.admin-tabs { display: flex; gap: 8px; margin-bottom: 32px; flex-wrap: wrap; }
+.admin-tab {
+  padding: 10px 22px; border-radius: 10px;
+  border: 2px solid rgba(14,94,111,0.2);
+  background: transparent; color: var(--ocean);
+  font-weight: 600; font-size: 0.875rem;
+  cursor: pointer; transition: all 0.2s;
+  font-family: var(--ff-body);
+}
+.admin-tab.active, .admin-tab:hover { background: var(--ocean); color: white; border-color: var(--ocean); }
+.admin-panel { display: none; }
+.admin-panel.active { display: block; }
+.admin-card { background: white; border-radius: 18px; padding: 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.07); margin-bottom: 24px; }
+.admin-card h3 { font-family: var(--ff-heading); font-size: 1.4rem; color: var(--teal); margin-bottom: 24px; }
+.admin-form .form-group label { color: var(--teal); }
+.admin-form .form-group input,
+.admin-form .form-group select,
+.admin-form .form-group textarea {
+  width: 100%; padding: 12px 16px;
+  border: 1.5px solid rgba(0,0,0,0.1);
+  border-radius: 12px; font-size: 0.9rem;
+  font-family: var(--ff-body); background: #f8fafc;
+  outline: none; transition: border 0.2s;
+}
+.admin-form .form-group input:focus,
+.admin-form .form-group textarea:focus { border-color: var(--ocean); }
+.admin-form .form-group textarea { min-height: 100px; resize: vertical; }
+.btn-admin-submit {
+  background: var(--ocean); color: white;
+  padding: 13px 28px; border: none; border-radius: 12px;
+  font-weight: 600; font-size: 0.95rem;
+  cursor: pointer; transition: all 0.2s;
+  font-family: var(--ff-body);
+}
+.btn-admin-submit:hover { background: var(--teal); }
+
+/* Bookings list */
+.booking-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-radius: 14px;
+  background: #f8fafc; margin-bottom: 12px;
+  border: 1.5px solid rgba(0,0,0,0.06);
+  gap: 16px; flex-wrap: wrap;
+}
+.booking-row.confirmed { border-color: #25D366; background: rgba(37,211,102,0.05); }
+.b-info { display: flex; flex-direction: column; gap: 4px; }
+.b-info strong { font-weight: 600; color: var(--teal); }
+.b-info span { font-size: 0.85rem; color: #8a9a9f; }
+.b-status { display: inline-block; padding: 3px 10px; border-radius: 50px; font-size: 0.75rem; font-weight: 600; background: rgba(244,162,97,0.15); color: #e07a30; }
+.b-status.confirmed { background: rgba(37,211,102,0.15); color: #1a9e50; }
+.btn-confirm-booking {
+  background: var(--ocean); color: white;
+  border: none; padding: 9px 18px; border-radius: 10px;
+  cursor: pointer; font-weight: 600; font-size: 0.85rem;
+  transition: all 0.2s; font-family: var(--ff-body);
+  white-space: nowrap;
+}
+.btn-confirm-booking:hover { background: var(--teal); }
+.btn-confirm-booking:disabled { background: #25D366; cursor: default; }
+
+/* Admin Login */
+#admin-login {
+  min-height: 100vh;
+  display: none; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--teal) 0%, var(--ocean) 100%);
+  padding: 24px;
+}
+.login-box {
+  background: white; border-radius: 24px;
+  padding: 40px; max-width: 440px; width: 100%;
+  box-shadow: 0 40px 100px rgba(0,0,0,0.4);
+}
+.login-box .brand {
+  text-align: center; margin-bottom: 28px;
+}
+.login-box .brand h2 { font-family: var(--ff-heading); font-size: 1.7rem; color: var(--teal); }
+.login-box .brand h2 span { color: var(--gold); }
+.login-box .brand p { color: #8a9a9f; font-size: 0.85rem; margin-top: 4px; }
+.auth-tabs { display: flex; gap: 0; background: #f0f4f7; border-radius: 12px; padding: 4px; margin-bottom: 28px; }
+.auth-tab-btn {
+  flex: 1; padding: 9px; border: none; background: transparent;
+  border-radius: 9px; font-weight: 600; font-size: 0.82rem;
+  color: #8a9a9f; cursor: pointer; transition: all 0.2s;
+  font-family: var(--ff-body);
+}
+.auth-tab-btn.active { background: white; color: var(--teal); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.auth-tab-panel { display: none; }
+.auth-error { font-size: 0.85rem; color: #e74c3c; min-height: 20px; margin-bottom: 8px; text-align: center; }
+.login-back { margin-top: 20px; text-align: center; }
+.login-back a { color: #8a9a9f; font-size: 0.82rem; cursor: pointer; text-decoration: none; }
+.login-back a:hover { color: var(--ocean); }
+
+/* Progress bar */
+.upload-progress { display:none; margin-top: 16px; }
+.upload-progress-track {
+  width: 100%; height: 8px; background: #e8f0f3;
+  border-radius: 50px; overflow: hidden; margin-bottom: 6px;
+}
+.upload-progress-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--ocean), var(--gold));
+  border-radius: 50px;
+  transition: width 0.25s ease;
+}
+.upload-progress-text { font-size: 0.8rem; color: var(--ocean); font-weight: 600; text-align: center; }
+.booking-error { font-size: 0.85rem; color: #e74c3c; margin-top: 10px; min-height: 18px; text-align: center; line-height: 1.5; }
+
+/* ══════════════════════════════════════════
+   ANIMATIONS
+══════════════════════════════════════════ */
+@keyframes fadeDown {
+  from { opacity: 0; transform: translateY(-24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes bounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(8px); }
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 8px 25px rgba(37,211,102,0.5); }
+  50% { box-shadow: 0 8px 40px rgba(37,211,102,0.75); }
+}
+
+/* Scroll reveal */
+.scroll-reveal { opacity: 0; transform: translateY(40px); transition: opacity 0.7s ease, transform 0.7s ease; }
+.scroll-reveal.revealed { opacity: 1; transform: translateY(0); }
+
+/* ══════════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  nav { padding: 16px 20px; }
+  .nav-links { display: none; }
+  .nav-hamburger { display: flex; }
+  .nav-mobile {
+    display: flex; flex-direction: column; gap: 0;
+    background: rgba(7,59,76,0.97);
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 999;
+    padding: 80px 32px 40px; justify-content: center; align-items: center;
+  }
+  .nav-mobile a {
+    color: white; font-size: 1.5rem; font-family: var(--ff-heading);
+    padding: 16px; text-align: center; width: 100%;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .nav-mobile-close {
+    position: absolute; top: 20px; right: 24px;
+    color: white; font-size: 2rem; cursor: pointer;
+  }
+  section { padding: 70px 20px; }
+  #gallery-grid { grid-template-columns: 1fr 1fr; }
+  .gallery-item:first-child, .gallery-item:nth-child(4) { grid-column: span 2; }
+  .location-grid { grid-template-columns: 1fr; }
+  .form-row { grid-template-columns: 1fr; }
+  .testimonial-card { flex: 0 0 85%; }
+  .hero-tickers { display: none; }
+  .admin-header { flex-direction: column; align-items: flex-start; }
+}
+@media (max-width: 480px) {
+  #gallery-grid { grid-template-columns: 1fr; }
+  .gallery-item:first-child, .gallery-item:nth-child(4) { grid-column: span 1; aspect-ratio: 16/9; }
+  #rooms-grid { grid-template-columns: 1fr; }
+  .testimonial-card { flex: 0 0 92%; }
+  .modal-box { padding: 28px 20px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════
+     MAIN WEBSITE
+═══════════════════════════════════════ -->
+<div id="main-site">
+
+<!-- NAVIGATION -->
+<nav id="main-nav">
+  <div class="nav-logo">Mombasa<span>Vacation</span></div>
+  <div class="nav-links">
+    <a href="#rooms">Rooms</a>
+    <a href="#gallery">Gallery</a>
+    <a href="#about">About</a>
+    <a href="#location">Location</a>
+    <a href="#testimonials">Reviews</a>
+    <a href="#" class="nav-book-btn" onclick="openBookingModal('');return false;">Book Now</a>
+  </div>
+  <div class="nav-hamburger" onclick="openMobileMenu()">
+    <span></span><span></span><span></span>
+  </div>
+</nav>
+
+<!-- MOBILE MENU -->
+<div class="nav-mobile" id="mobile-menu" style="display:none;">
+  <div class="nav-mobile-close" onclick="closeMobileMenu()">✕</div>
+  <a href="#rooms" onclick="closeMobileMenu()">Rooms</a>
+  <a href="#gallery" onclick="closeMobileMenu()">Gallery</a>
+  <a href="#about" onclick="closeMobileMenu()">About</a>
+  <a href="#location" onclick="closeMobileMenu()">Location</a>
+  <a href="#testimonials" onclick="closeMobileMenu()">Reviews</a>
+  <a href="#" onclick="openBookingModal('');closeMobileMenu();return false;" style="color:var(--gold);">Book Now</a>
+</div>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-content">
+    <div class="hero-badge">🌊 Mombasa's Finest Stays</div>
+    <h1 class="hero-title">Luxury Stays<br>in <em>Mombasa</em></h1>
+    <p class="hero-sub">Experience premium beachfront living at affordable rates.<br>Your perfect coastal escape awaits.</p>
+    <div class="hero-btns">
+      <button class="btn-primary" onclick="openBookingModal('')">Book Your Stay</button>
+      <a href="#rooms" class="btn-outline">View Rooms</a>
+    </div>
+  </div>
+  <div class="hero-tickers">
+    <div class="ticker">
+      <div class="ticker-label">Studio</div>
+      <div class="ticker-price">KES 5,500</div>
+    </div>
+    <div class="ticker">
+      <div class="ticker-label">1 Bedroom</div>
+      <div class="ticker-price">KES 8,000</div>
+    </div>
+    <div class="ticker">
+      <div class="ticker-label">2 Bedroom</div>
+      <div class="ticker-price">KES 12,000</div>
+    </div>
+  </div>
+  <div class="hero-scroll-hint">Scroll to explore</div>
+</section>
+
+<!-- ROOMS -->
+<section id="rooms">
+  <div class="section-header">
+    <span class="section-label">Accommodations</span>
+    <h2 class="section-title">Our <em>Premium</em> Rooms</h2>
+    <p class="section-sub">Each space is thoughtfully designed to deliver the perfect blend of comfort, style, and coastal charm.</p>
+  </div>
+  <div id="rooms-grid">
+    <div style="grid-column:1/-1;text-align:center;padding:40px;color:#aaa">Loading rooms…</div>
+  </div>
+</section>
+
+<!-- GALLERY -->
+<section id="gallery">
+  <div class="section-header">
+    <span class="section-label">Photo Gallery</span>
+    <h2 class="section-title">A Glimpse of <em>Paradise</em></h2>
+    <p class="section-sub">From stunning ocean views to beautifully appointed interiors — see what awaits you.</p>
+  </div>
+  <div id="gallery-grid"></div>
+</section>
+
+<!-- ABOUT / FEATURES -->
+<section id="about">
+  <div class="section-header">
+    <span class="section-label">Why Choose Us</span>
+    <h2 class="section-title">The <em>Mombasa Vacation</em> Experience</h2>
+    <p class="section-sub">We deliver more than just accommodation — we create memories that last a lifetime.</p>
+  </div>
+  <div class="features-grid scroll-reveal">
+    <div class="feature-card">
+      <div class="feature-icon">🌊</div>
+      <h4>Beachfront Location</h4>
+      <p>Steps from the white-sand beaches and turquoise waters of the Kenyan coast.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🏡</div>
+      <h4>Premium Interiors</h4>
+      <p>Fully furnished, modern interiors with high-end fixtures and coastal décor.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔒</div>
+      <h4>Safe & Secure</h4>
+      <p>24/7 security, controlled access, and peace of mind throughout your stay.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💬</div>
+      <h4>Instant Support</h4>
+      <p>WhatsApp support available around the clock for all your needs.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⚡</div>
+      <h4>High-Speed WiFi</h4>
+      <p>Fibre-optic internet for remote workers and digital nomads.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🌅</div>
+      <h4>Ocean Views</h4>
+      <p>Wake up to breathtaking sunrises over the Indian Ocean every morning.</p>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section id="testimonials">
+  <div class="section-header">
+    <span class="section-label">Guest Reviews</span>
+    <h2 class="section-title">What Our <em>Guests</em> Say</h2>
+    <p class="section-sub">Real experiences from real guests who chose Mombasa Vacation.</p>
+  </div>
+  <div class="testimonials-slider">
+    <div id="testimonials-track"></div>
+  </div>
+  <div class="slider-controls">
+    <button class="slider-btn" id="prev-btn" onclick="slideTestimonials(-1)">←</button>
+    <button class="slider-btn" id="next-btn" onclick="slideTestimonials(1)">→</button>
+  </div>
+</section>
+
+<!-- LOCATION -->
+<section id="location">
+  <div class="section-header">
+    <span class="section-label">Location</span>
+    <h2 class="section-title">Perfectly <em>Situated</em></h2>
+    <p class="section-sub">At the heart of Mombasa's most vibrant coastal neighbourhood.</p>
+  </div>
+  <div class="location-grid scroll-reveal">
+    <div class="location-info">
+      <h3>Close to Everything That Matters</h3>
+      <p>Our properties are nestled in a prime location that puts the best of Mombasa right at your doorstep — from pristine beaches to world-class dining.</p>
+      <ul class="proximity-list">
+        <li><span>🏖️</span> Diani Beach — 2 minutes walk</li>
+        <li><span>🍽️</span> Tamarind Restaurant — 5 minutes drive</li>
+        <li><span>🛍️</span> Nyali Cinemax & Mall — 10 minutes</li>
+        <li><span>✈️</span> Moi International Airport — 25 minutes</li>
+        <li><span>🏛️</span> Fort Jesus (UNESCO) — 20 minutes</li>
+        <li><span>🌿</span> Haller Park — 15 minutes</li>
+      </ul>
+    </div>
+    <div class="map-wrap">
+      <iframe
+        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d254832.1703178765!2d39.55395685!3d-3.9893498!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x184013e5b4f0e4d5%3A0x9366bae14a65db2d!2sMombasa%2C%20Kenya!5e0!3m2!1sen!2s!4v1700000000000!5m2!1sen!2s"
+        allowfullscreen loading="lazy" title="Mombasa Map">
+      </iframe>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section id="cta">
+  <div class="section-header" style="position:relative;">
+    <span class="section-label">Contact & Booking</span>
+    <h2 class="section-title">Ready for Your<br><em>Coastal Escape?</em></h2>
+    <p class="section-sub">Limited availability — secure your spot today.</p>
+    <div class="cta-phone">0755 100 090</div>
+    <div class="cta-btns">
+      <a href="https://wa.me/254755100090?text=Hi!%20I'd%20like%20to%20book%20a%20stay%20at%20Mombasa%20Vacation" target="_blank" class="btn-whatsapp">
+        💬 WhatsApp Us
+      </a>
+      <a href="tel:+254755100090" class="btn-call">📞 Call Now</a>
+      <button class="btn-primary" onclick="openBookingModal('')">📋 Book Online</button>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">Mombasa<span>Vacation</span></div>
+  <p>Luxury beachfront stays in the heart of Mombasa, Kenya.</p>
+  <div class="footer-links">
+    <a href="#hero">Home</a>
+    <a href="#rooms">Rooms</a>
+    <a href="#gallery">Gallery</a>
+    <a href="#location">Location</a>
+    <a href="#" onclick="showAdminPage();return false;">Admin</a>
+  </div>
+  <hr>
+  <small>© 2025 Mombasa Vacation. All rights reserved. | Crafted with ❤️ for coastal luxury.</small>
+</footer>
+
+</div><!-- end #main-site -->
+
+<!-- ═══════════════════════════════════════
+     ADMIN PAGE
+═══════════════════════════════════════ -->
+<div id="admin-page">
+  <!-- Admin Auth -->
+  <div id="admin-login">
+    <div class="login-box">
+
+      <div class="brand">
+        <div style="font-size:2rem;margin-bottom:8px;">🌊</div>
+        <h2>Mombasa<span>Vacation</span></h2>
+        <p>Property Management Portal</p>
+      </div>
+
+      <!-- Tabs: Login / Forgot Password only -->
+      <div class="auth-tabs">
+        <button class="auth-tab-btn active" id="auth-tab-login" onclick="showAuthTab('login')">Sign In</button>
+        <button class="auth-tab-btn" id="auth-tab-forgot" onclick="showAuthTab('forgot')">Forgot Password</button>
+      </div>
+
+      <div class="auth-error" id="auth-error"></div>
+
+      <!-- LOGIN -->
+      <div class="auth-tab-panel" id="auth-panel-login" style="display:block;">
+        <form onsubmit="adminLogin(event)" class="admin-form">
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="login-email" required placeholder="you@example.com" autocomplete="email">
+          </div>
+          <div class="form-group" style="position:relative;">
+            <label>Password</label>
+            <input type="password" id="login-pass" required placeholder="••••••••" autocomplete="current-password">
+          </div>
+          <button type="submit" class="btn-admin-submit" style="width:100%;padding:15px;margin-top:8px;">Sign In</button>
+        </form>
+        <p style="text-align:center;margin-top:16px;font-size:0.82rem;color:#aaa;">
+          Forgot your password?
+          <a href="#" onclick="showAuthTab('forgot');return false;" style="color:var(--ocean);font-weight:600;">Reset it here</a>
+        </p>
+      </div>
+
+      <!-- FORGOT PASSWORD -->
+      <div class="auth-tab-panel" id="auth-panel-forgot">
+        <p style="color:#6a8a95;font-size:0.875rem;margin-bottom:20px;line-height:1.6;">
+          Enter your email address and Firebase will send you a password reset link directly.
+        </p>
+        <form onsubmit="adminResetPassword(event)" class="admin-form">
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="reset-email" required placeholder="you@example.com" autocomplete="email">
+          </div>
+          <button type="submit" class="btn-admin-submit" style="width:100%;padding:15px;margin-top:8px;">Send Reset Link</button>
+        </form>
+        <p style="text-align:center;margin-top:16px;font-size:0.82rem;color:#aaa;">
+          Remembered it? <a href="#" onclick="showAuthTab('login');return false;" style="color:var(--ocean);font-weight:600;">Back to Sign In</a>
+        </p>
+      </div>
+
+      <div class="login-back">
+        <a onclick="hideAdminPage();return false;">← Back to Website</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Dashboard -->
+  <div id="admin-section" style="display:none;">
+    <div class="admin-wrapper">
+      <div class="admin-header">
+        <div>
+          <div class="admin-title">Mombasa Vacation — Admin</div>
+          <p style="color:#8a9a9f;font-size:0.875rem;margin-top:4px">Signed in as <strong id="admin-user-email" style="color:var(--ocean)"></strong></p>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <button onclick="hideAdminPage()" style="background:var(--ocean);color:white;border:none;padding:10px 22px;border-radius:10px;cursor:pointer;font-weight:600;">← Website</button>
+          <button onclick="adminLogout()" class="btn-logout">Log Out</button>
+        </div>
+      </div>
+
+      <div class="admin-tabs">
+        <button class="admin-tab active" onclick="showAdminTab('bookings',this)">📋 Bookings</button>
+        <button class="admin-tab" onclick="showAdminTab('gallery-admin',this)">🖼️ Gallery</button>
+        <button class="admin-tab" onclick="showAdminTab('rooms-admin',this)">🛏️ Rooms</button>
+        <button class="admin-tab" onclick="showAdminTab('account',this)">🔑 My Account</button>
+      </div>
+
+      <!-- BOOKINGS PANEL -->
+      <div class="admin-panel active" id="panel-bookings">
+        <div class="admin-card">
+          <h3>📋 Guest Bookings</h3>
+          <div id="admin-bookings-list">
+            <p style="color:#aaa;padding:20px;text-align:center">Loading bookings…</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- GALLERY PANEL -->
+      <div class="admin-panel" id="panel-gallery-admin">
+        <div class="admin-card">
+          <h3>🖼️ Upload Gallery Image</h3>
+          <form onsubmit="uploadGalleryImage(event)" class="admin-form">
+            <div class="form-group">
+              <label>Image Title</label>
+              <input type="text" id="gallery-title" required placeholder="e.g. Ocean View Terrace">
+            </div>
+            <div class="form-group">
+              <label>Image File</label>
+              <input type="file" id="gallery-file" accept="image/*" required>
+            </div>
+            <button type="submit" class="btn-admin-submit">Upload Image</button>
+            <div class="upload-progress" id="gallery-upload-progress">
+              <div class="upload-progress-track"><div class="upload-progress-fill" id="gallery-progress-bar"></div></div>
+              <div class="upload-progress-text" id="gallery-progress-text">0%</div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ROOMS PANEL -->
+      <div class="admin-panel" id="panel-rooms-admin">
+        <div class="admin-card">
+          <h3>🛏️ Add New Room</h3>
+          <form onsubmit="addRoom(event)" class="admin-form">
+            <div class="form-group">
+              <label>Room Name</label>
+              <input type="text" id="room-name" required placeholder="e.g. Studio Suite">
+            </div>
+            <div class="form-group">
+              <label>Price per Night (KES)</label>
+              <input type="number" id="room-price" required placeholder="5500">
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea id="room-desc" required placeholder="Describe the room…"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Amenities (comma-separated)</label>
+              <input type="text" id="room-amenities" placeholder="WiFi, AC, TV, Kitchen, Parking">
+            </div>
+            <div class="form-group">
+              <label>Room Image</label>
+              <input type="file" id="room-img-file" accept="image/*">
+            </div>
+            <button type="submit" class="btn-admin-submit">Add Room</button>
+            <div class="upload-progress" id="room-upload-progress">
+              <div class="upload-progress-track"><div class="upload-progress-fill" id="room-progress-bar"></div></div>
+              <div class="upload-progress-text" id="room-progress-text">0%</div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ACCOUNT / CHANGE PASSWORD PANEL -->
+      <div class="admin-panel" id="panel-account">
+        <div class="admin-card" style="max-width:480px;">
+          <h3>🔑 Change Your Password</h3>
+          <p style="color:#8a9a9f;font-size:0.875rem;margin-bottom:24px;line-height:1.6;">
+            Use this to change from the temporary password you were given to something only you know.
+          </p>
+          <div class="auth-error" id="change-pass-error" style="text-align:left;margin-bottom:16px;min-height:0;font-size:0.875rem;"></div>
+          <form onsubmit="changePassword(event)" class="admin-form">
+            <div class="form-group">
+              <label>Current Password</label>
+              <input type="password" id="current-pass" required placeholder="Your current password" autocomplete="current-password">
+            </div>
+            <div class="form-group">
+              <label>New Password <span style="color:#aaa;font-weight:400;">(min. 6 characters)</span></label>
+              <input type="password" id="new-pass" required placeholder="Choose a strong password" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+              <label>Confirm New Password</label>
+              <input type="password" id="confirm-new-pass" required placeholder="Repeat new password" autocomplete="new-password">
+            </div>
+            <button type="submit" class="btn-admin-submit">Update Password</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BOOKING MODAL -->
+<div id="booking-modal">
+  <div class="modal-box">
+    <div class="modal-inner">
+      <button class="modal-close-btn" onclick="closeBookingModal()">✕</button>
+      <h2>Reserve Your Stay</h2>
+      <p>Fill in your details and we'll confirm your booking shortly.</p>
+      <form onsubmit="submitBooking(event)">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" id="b-name" required placeholder="Your full name">
+        </div>
+        <div class="form-group">
+          <label>Phone Number</label>
+          <input type="tel" id="b-phone" required placeholder="+254 7XX XXX XXX">
+        </div>
+        <div class="form-group">
+          <label>Room Type</label>
+          <select id="b-room" required>
+            <option value="">Select a room</option>
+            <option value="Studio Suite">Studio Suite — KES 5,500/night</option>
+            <option value="1 Bedroom Apartment">1 Bedroom Apartment — KES 8,000/night</option>
+            <option value="2 Bedroom Penthouse">2 Bedroom Penthouse — KES 12,000/night</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Check-In Date</label>
+            <input type="date" id="b-checkin" required>
+          </div>
+          <div class="form-group">
+            <label>Check-Out Date</label>
+            <input type="date" id="b-checkout" required>
+          </div>
+        </div>
+        <button type="submit" class="modal-submit">Confirm Booking</button>
+        <div class="booking-error" id="booking-error"></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="lightbox">
+  <div id="lightbox-close" onclick="closeLightbox()">✕</div>
+  <img id="lightbox-img" src="" alt="">
+  <div id="lightbox-title"></div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- WHATSAPP FAB -->
+<a id="wa-fab" href="https://wa.me/254755100090?text=Hi!%20I'd%20like%20to%20book%20a%20stay." target="_blank" aria-label="WhatsApp">💬</a>
+
+<script>
+/* ══════════════════════════════════════════
+   CORE UI SCRIPTS
+══════════════════════════════════════════ */
+
+// NAV SCROLL
+window.addEventListener('scroll', () => {
+  const nav = document.getElementById('main-nav');
+  if (nav) nav.classList.toggle('scrolled', window.scrollY > 60);
+});
+
+// MOBILE MENU
+function openMobileMenu() {
+  const m = document.getElementById('mobile-menu');
+  m.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeMobileMenu() {
+  const m = document.getElementById('mobile-menu');
+  m.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+// BOOKING MODAL
+function openBookingModal(roomName) {
+  const modal = document.getElementById('booking-modal');
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  if (roomName) {
+    const sel = document.getElementById('b-room');
+    for (let o of sel.options) {
+      if (o.value.includes(roomName)) { sel.value = o.value; break; }
+    }
+  }
+  // Set min dates
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('b-checkin').min = today;
+  document.getElementById('b-checkout').min = today;
+}
+function closeBookingModal() {
+  document.getElementById('booking-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.getElementById('booking-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeBookingModal();
+});
+
+// LIGHTBOX
+function openLightbox(url, title) {
+  document.getElementById('lightbox-img').src = url;
+  document.getElementById('lightbox-title').textContent = title || '';
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.getElementById('lightbox').addEventListener('click', function(e) {
+  if (e.target === this) closeLightbox();
+});
+
+// TOAST
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// SCROLL ANIMATIONS
+function initScrollAnimations() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry, i) => {
+      if (entry.isIntersecting) {
+        setTimeout(() => entry.target.classList.add('revealed'), i * 80);
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.scroll-reveal').forEach(el => observer.observe(el));
+}
+document.addEventListener('DOMContentLoaded', initScrollAnimations);
+
+// TESTIMONIALS SLIDER
+let _slideIndex = 0;
+function initTestimonialSlider() {
+  const cards = document.querySelectorAll('.testimonial-card');
+  if (!cards.length) return;
+  // Auto-slide
+  setInterval(() => slideTestimonials(1), 5000);
+}
+function slideTestimonials(dir) {
+  const track = document.getElementById('testimonials-track');
+  const cards = track.querySelectorAll('.testimonial-card');
+  if (!cards.length) return;
+  const visible = window.innerWidth < 768 ? 1 : 2;
+  const max = Math.max(0, cards.length - visible);
+  _slideIndex = Math.max(0, Math.min(_slideIndex + dir, max));
+  const cardWidth = cards[0].offsetWidth + 24;
+  track.style.transform = `translateX(-${_slideIndex * cardWidth}px)`;
+}
+
+// ADMIN PAGE TOGGLE
+function showAdminPage() {
+  document.getElementById('main-site').style.display = 'none';
+  document.getElementById('admin-page').classList.add('active');
+  window.scrollTo(0, 0);
+}
+function hideAdminPage() {
+  document.getElementById('main-site').style.display = 'block';
+  document.getElementById('admin-page').classList.remove('active');
+}
+
+// ADMIN TABS
+function showAdminTab(name, btn) {
+  document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// KEYBOARD CLOSE
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeLightbox(); closeBookingModal(); }
+});
+
+// Hash routing
+if (window.location.hash === '#admin') {
+  document.addEventListener('DOMContentLoaded', showAdminPage);
+}
+</script>
+</body>
+</html>
