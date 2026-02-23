@@ -15,8 +15,9 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-  import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
   import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  const IMGBB_API_KEY = 'f08ac3507948bb97824668c26e50ae1d';
 
   const firebaseConfig = {
     apiKey: "AIzaSyDI3IZFLJKkqApw8nYKPtZZi9jKDO8rHDU",
@@ -30,11 +31,10 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-  const storage = getStorage(app);
   const auth = getAuth(app);
 
   // ─── EXPOSE GLOBALLY ───
-  window._firebase = { db, storage, auth, collection, addDoc, getDocs, onSnapshot, query, orderBy, serverTimestamp, ref, uploadBytes, uploadBytesResumable, getDownloadURL, doc, updateDoc };
+  window._firebase = { db, auth, collection, addDoc, getDocs, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc };
 
   // ─── LOAD ROOMS ───
   async function loadRooms() {
@@ -339,9 +339,7 @@
     const file = document.getElementById('gallery-file').files[0];
     const title = document.getElementById('gallery-title').value;
     if (!file) { showToast('Please select an image'); return; }
-
-    // File size guard — 5MB max
-    if (file.size > 5 * 1024 * 1024) { showToast('❌ Image must be under 5MB'); return; }
+    if (file.size > 10 * 1024 * 1024) { showToast('❌ Image must be under 10MB'); return; }
 
     const btn = e.target.querySelector('button');
     const progressWrap = document.getElementById('gallery-upload-progress');
@@ -350,52 +348,57 @@
 
     btn.style.display = 'none';
     progressWrap.style.display = 'block';
+    progressBar.style.width = '20%';
+    progressText.textContent = 'Compressing…';
 
     try {
-      const { storage, db, ref, uploadBytesResumable, getDownloadURL, collection, addDoc, serverTimestamp } = window._firebase;
+      const { db, collection, addDoc, serverTimestamp } = window._firebase;
 
-      // Compress image before upload
-      const compressedFile = await compressImage(file, 1200, 0.82);
+      // Compress image
+      const compressed = await compressImage(file, 1200, 0.82);
+      progressBar.style.width = '40%';
+      progressText.textContent = 'Uploading…';
 
-      const storageRef = ref(storage, `gallery/${Date.now()}_${file.name}`);
-      const uploadTask = uploadBytesResumable(storageRef, compressedFile);
+      // Upload to ImgBB
+      const formData = new FormData();
+      formData.append('image', compressed, file.name);
 
-      await new Promise((resolve, reject) => {
-        uploadTask.on('state_changed',
-          (snapshot) => {
-            const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-            progressBar.style.width = pct + '%';
-            progressText.textContent = pct + '%';
-          },
-          (err) => reject(err),
-          () => resolve()
-        );
+      const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+        method: 'POST',
+        body: formData
       });
 
-      const url = await getDownloadURL(uploadTask.snapshot.ref);
+      progressBar.style.width = '80%';
+      progressText.textContent = 'Saving…';
+
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error?.message || 'ImgBB upload failed');
+
+      const imageUrl = data.data.url;
+
+      // Save URL to Firestore
       await addDoc(collection(db, 'gallery'), {
-        imageUrl: url,
+        imageUrl,
         title: title || 'Gallery Image',
         uploadedAt: serverTimestamp()
       });
 
+      progressBar.style.width = '100%';
+      progressText.textContent = '100%';
       showToast('✅ Image uploaded successfully!');
       e.target.reset();
+
     } catch(err) {
       console.error('Upload error:', err);
-      if (err.code === 'storage/unauthorized') {
-        showToast('❌ Permission denied. Check your Firebase Storage rules.');
-      } else if (err.code === 'storage/canceled') {
-        showToast('❌ Upload was cancelled.');
-      } else {
-        showToast('❌ Upload failed: ' + (err.message || err.code));
-      }
+      showToast('❌ Upload failed: ' + (err.message || 'Please try again'));
     }
 
-    btn.style.display = 'block';
-    progressWrap.style.display = 'none';
-    progressBar.style.width = '0%';
-    progressText.textContent = '0%';
+    setTimeout(() => {
+      btn.style.display = 'block';
+      progressWrap.style.display = 'none';
+      progressBar.style.width = '0%';
+      progressText.textContent = '0%';
+    }, 1000);
   };
 
   // ─── ADMIN: ADD ROOM ───
@@ -409,37 +412,43 @@
 
     btn.style.display = 'none';
     progressWrap.style.display = 'block';
+    progressBar.style.width = '10%';
+    progressText.textContent = 'Starting…';
 
     try {
-      const { storage, db, ref, uploadBytesResumable, getDownloadURL, collection, addDoc, serverTimestamp } = window._firebase;
+      const { db, collection, addDoc, serverTimestamp } = window._firebase;
 
       let imageUrl = '';
       if (file) {
-        if (file.size > 5 * 1024 * 1024) {
-          showToast('❌ Image must be under 5MB');
+        if (file.size > 10 * 1024 * 1024) {
+          showToast('❌ Image must be under 10MB');
           btn.style.display = 'block';
           progressWrap.style.display = 'none';
           return;
         }
+
+        progressBar.style.width = '30%';
+        progressText.textContent = 'Compressing…';
         const compressed = await compressImage(file, 1200, 0.82);
-        const storageRef = ref(storage, `rooms/${Date.now()}_${file.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, compressed);
-        await new Promise((resolve, reject) => {
-          uploadTask.on('state_changed',
-            (snapshot) => {
-              const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-              progressBar.style.width = pct + '%';
-              progressText.textContent = pct + '%';
-            },
-            reject,
-            resolve
-          );
+
+        progressBar.style.width = '50%';
+        progressText.textContent = 'Uploading…';
+
+        const formData = new FormData();
+        formData.append('image', compressed, file.name);
+
+        const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+          method: 'POST',
+          body: formData
         });
-        imageUrl = await getDownloadURL(uploadTask.snapshot.ref);
-      } else {
-        progressBar.style.width = '60%';
-        progressText.textContent = 'Saving…';
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error?.message || 'ImgBB upload failed');
+        imageUrl = data.data.url;
       }
+
+      progressBar.style.width = '80%';
+      progressText.textContent = 'Saving room…';
 
       await addDoc(collection(db, 'rooms'), {
         name: document.getElementById('room-name').value.trim(),
@@ -454,19 +463,18 @@
       progressText.textContent = '100%';
       showToast('✅ Room added successfully!');
       e.target.reset();
+
     } catch(err) {
       console.error('Add room error:', err);
-      if (err.code === 'storage/unauthorized' || err.code === 'permission-denied') {
-        showToast('❌ Permission denied. Check your Firebase rules.');
-      } else {
-        showToast('❌ Error: ' + (err.message || err.code));
-      }
+      showToast('❌ Error: ' + (err.message || 'Please try again'));
     }
 
-    btn.style.display = 'block';
-    progressWrap.style.display = 'none';
-    progressBar.style.width = '0%';
-    progressText.textContent = '0%';
+    setTimeout(() => {
+      btn.style.display = 'block';
+      progressWrap.style.display = 'none';
+      progressBar.style.width = '0%';
+      progressText.textContent = '0%';
+    }, 1000);
   };
 
   // ─── IMAGE COMPRESSION HELPER ───
